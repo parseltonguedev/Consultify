@@ -1,42 +1,57 @@
 import json
+from openai import OpenAI
+import os
 
-# import requests
+client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
+# Predefined responses
+predefined_responses = {
+    "What services do you offer?": "We offer a wide range of legal services including contract law, family law, criminal defense, and corporate law. For more details, visit our services page.",
+    "What is your price list?": "Our pricing varies depending on the service. For a detailed price list, please visit our pricing page or contact our support team.",
+    "How can I contact you?": "You can contact us via phone at (123) 456-7890 or email at contact@legalservices.com. We are also available on WhatsApp and Telegram.",
+    "What are your operating hours?": "Our operating hours are Monday to Friday, 9 AM to 6 PM. We are closed on weekends and public holidays."
+}
 
 def lambda_handler(event, context):
-    """Sample pure Lambda function
+    try:
+        # Get user query from the event
+        body = json.loads(event['body'])
+        user_query = body['query']
+        conversation_history = body.get('history', [])
 
-    Parameters
-    ----------
-    event: dict, required
-        API Gateway Lambda Proxy Input Format
+        # Check for predefined response
+        if user_query in predefined_responses:
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'response': predefined_responses[user_query]})
+            }
 
-        Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
+        # OpenAI API key from environment variable
 
-    context: object, required
-        Lambda Context runtime methods and attributes
+        # Generate prompt for the new API
+        messages = [
+            {"role": "system", "content": "You are a highly experienced legal consultant specializing in contract law."},
+            {"role": "user", "content": user_query}
+        ]
 
-        Context doc: https://docs.aws.amazon.com/lambda/latest/dg/python-context-object.html
+        for message in conversation_history:
+            messages.append({"role": "user", "content": message})
 
-    Returns
-    ------
-    API Gateway Lambda Proxy Output Format: dict
+        # Call OpenAI API with the new ChatCompletion.create method
+        response = client.chat.completions.create(model="gpt-3.5-turbo",
+        messages=messages,
+        max_tokens=150,
+        temperature=0.7)
 
-        Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
-    """
+        # Extract and return the response
+        result = response.choices[0].message.content.strip()
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'response': result})
+        }
 
-    # try:
-    #     ip = requests.get("http://checkip.amazonaws.com/")
-    # except requests.RequestException as e:
-    #     # Send some context about this error to Lambda Logs
-    #     print(e)
-
-    #     raise e
-
-    return {
-        "statusCode": 200,
-        "body": json.dumps({
-            "message": "hello world",
-            # "location": ip.text.replace("\n", "")
-        }),
-    }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': str(e)})
+        }
